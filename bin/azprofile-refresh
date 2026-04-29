@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Ensure az is on PATH in cron environments
+for p in /usr/local/bin /opt/homebrew/bin "$HOME/.local/bin"; do
+    [[ ":$PATH:" != *":$p:"* ]] && [ -d "$p" ] && PATH="$p:$PATH"
+done
+export PATH
+
+# Skip colors when not on a terminal (e.g. cron)
+if [ -t 1 ]; then
+    RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[0;33m'
+    BLUE='\033[0;34m' DIM='\033[2m' BOLD='\033[1m' NC='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' BLUE='' DIM='' BOLD='' NC=''
+fi
+
+CHECK="✓"
+CROSS="✗"
+ARROW="→"
+
+AZPROFILE_HOME="${AZPROFILE_HOME:-$HOME}"
+PROFILES_DIR="$AZPROFILE_HOME/.azure-profiles"
+
+refresh_profile() {
+    local name="$1"
+    local dir="$PROFILES_DIR/$name"
+
+    if AZURE_CONFIG_DIR="$dir" az account get-access-token --output none 2>/dev/null; then
+        local user
+        user="$(AZURE_CONFIG_DIR="$dir" az account show --query 'user.name' -o tsv 2>/dev/null || echo 'unknown')"
+        echo -e "  ${GREEN}${CHECK}${NC} ${BOLD}${name}${NC} ${DIM}(${user})${NC}"
+    else
+        echo -e "  ${RED}${CROSS}${NC} ${BOLD}${name}${NC} ${DIM}— token refresh failed, may need: azprofile init ${name}${NC}"
+        return 1
+    fi
+}
+
+echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${BOLD}${BLUE}${ARROW} Azure Token Refresh${NC}"
+echo -e "${DIM}────────────────────${NC}"
+
+if [ ! -d "$PROFILES_DIR" ]; then
+    echo -e "  ${YELLOW}No profiles found.${NC}"
+    exit 0
+fi
+
+failures=0
+
+# Refresh specific profiles or all
+if [ $# -gt 0 ]; then
+    for name in "$@"; do
+        if [ -d "$PROFILES_DIR/$name" ]; then
+            refresh_profile "$name" || ((failures++))
+        else
+            echo -e "  ${RED}${CROSS}${NC} ${BOLD}${name}${NC} ${DIM}— profile not found${NC}"
+            ((failures++))
+        fi
+    done
+else
+    for dir in "$PROFILES_DIR"/*/; do
+        [ -d "$dir" ] || continue
+        refresh_profile "$(basename "$dir")" || ((failures++))
+    done
+fi
+
+exit "$failures"
