@@ -146,22 +146,39 @@ cmd_whoami() {
     az account show -o table
 }
 
-CRON_TAG="# azprofile-refresh"
+CRON_TAG_PREFIX="# azprofile-refresh"
 REFRESH_SCRIPT="$(cd "$(dirname "$0")" && pwd)/azprofile-refresh"
+
+cron_tag_for() {
+    local profile="${1:-all}"
+    echo "${CRON_TAG_PREFIX}:${profile}"
+}
 
 cmd_cron() {
     local action="${1:-status}"
 
     case "$action" in
         install)
-            local schedule="${2:-13 * * * *}"
-            local cron_line="AZPROFILE_HOME=$AZPROFILE_HOME ${schedule} ${REFRESH_SCRIPT} >> ${AZPROFILE_HOME}/.azure-profiles/refresh.log 2>&1 ${CRON_TAG}"
+            local profile="${2:-}"
+            local schedule="${3:-13 * * * *}"
+            local tag
+            tag="$(cron_tag_for "$profile")"
 
-            # Remove existing entry if present, then append
+            local refresh_args=""
+            local label="all profiles"
+            if [ -n "$profile" ]; then
+                [ -d "$PROFILES_DIR/$profile" ] || die "Profile '$profile' not found. Run: azprofile init $profile"
+                refresh_args=" $profile"
+                label="profile '$profile'"
+            fi
+
+            local cron_line="AZPROFILE_HOME=$AZPROFILE_HOME ${schedule} ${REFRESH_SCRIPT}${refresh_args} >> ${AZPROFILE_HOME}/.azure-profiles/refresh.log 2>&1 ${tag}"
+
+            # Remove existing entry for this specific profile/all, then append
             local existing
             existing="$(crontab -l 2>/dev/null || true)"
             local filtered
-            filtered="$(echo "$existing" | grep -v "$CRON_TAG" || true)"
+            filtered="$(echo "$existing" | grep -v "$tag" || true)"
 
             if [ -n "$filtered" ]; then
                 printf '%s\n%s\n' "$filtered" "$cron_line" | crontab -
@@ -169,14 +186,24 @@ cmd_cron() {
                 echo "$cron_line" | crontab -
             fi
 
-            echo -e "${GREEN}${CHECK}${NC} Cron installed: ${DIM}${schedule}${NC}"
+            echo -e "${GREEN}${CHECK}${NC} Cron installed for ${BOLD}${label}${NC}: ${DIM}${schedule}${NC}"
             echo -e "${DIM}  Log: ${AZPROFILE_HOME}/.azure-profiles/refresh.log${NC}"
             ;;
         remove)
+            local profile="${2:-}"
+            local tag
+
+            if [ -n "$profile" ]; then
+                tag="$(cron_tag_for "$profile")"
+            else
+                # No profile specified: remove all azprofile-refresh entries
+                tag="$CRON_TAG_PREFIX"
+            fi
+
             local existing
             existing="$(crontab -l 2>/dev/null || true)"
             local filtered
-            filtered="$(echo "$existing" | grep -v "$CRON_TAG" || true)"
+            filtered="$(echo "$existing" | grep -v "$tag" || true)"
 
             if [ -z "$filtered" ]; then
                 crontab -r 2>/dev/null || true
@@ -184,20 +211,26 @@ cmd_cron() {
                 echo "$filtered" | crontab -
             fi
 
-            echo -e "${GREEN}${CHECK}${NC} Cron removed"
+            if [ -n "$profile" ]; then
+                echo -e "${GREEN}${CHECK}${NC} Cron removed for profile '${profile}'"
+            else
+                echo -e "${GREEN}${CHECK}${NC} All azprofile crons removed"
+            fi
             ;;
         status)
-            local entry
-            entry="$(crontab -l 2>/dev/null | grep "$CRON_TAG" || true)"
-            if [ -n "$entry" ]; then
-                echo -e "${GREEN}${CHECK}${NC} Cron is installed:"
-                echo -e "  ${DIM}${entry}${NC}"
+            local entries
+            entries="$(crontab -l 2>/dev/null | grep "$CRON_TAG_PREFIX" || true)"
+            if [ -n "$entries" ]; then
+                echo -e "${GREEN}${CHECK}${NC} Installed crons:"
+                while IFS= read -r line; do
+                    echo -e "  ${DIM}${line}${NC}"
+                done <<< "$entries"
             else
-                echo -e "${DIM}-${NC} No cron installed. Run: azprofile cron install"
+                echo -e "${DIM}-${NC} No crons installed. Run: azprofile cron install [profile] [schedule]"
             fi
             ;;
         *)
-            die "Usage: azprofile cron [install [schedule]|remove|status]"
+            die "Usage: azprofile cron [install [profile] [schedule]|remove [profile]|status]"
             ;;
     esac
 }
@@ -210,9 +243,11 @@ cmd_help() {
     echo -e "  ${BOLD}current${NC}         Show active profile"
     echo -e "  ${BOLD}init <name>${NC}     Create a profile and login"
     echo -e "  ${BOLD}whoami${NC}          Show active account details"
-    echo -e "  ${BOLD}cron install${NC}    Install hourly token refresh cron"
-    echo -e "  ${BOLD}cron remove${NC}     Remove the cron"
-    echo -e "  ${BOLD}cron status${NC}     Check if cron is installed"
+    echo -e "  ${BOLD}cron install [profile] [schedule]${NC}"
+    echo -e "                    Install token refresh cron (all profiles or specific one)"
+    echo -e "  ${BOLD}cron remove [profile]${NC}"
+    echo -e "                    Remove cron (specific profile, or all if omitted)"
+    echo -e "  ${BOLD}cron status${NC}     Show installed crons"
     echo -e "  ${BOLD}help${NC}            Show this help"
 }
 
@@ -222,7 +257,7 @@ case "${1:-help}" in
     current) cmd_current ;;
     init)    cmd_init "${2:-}" ;;
     whoami)  cmd_whoami ;;
-    cron)    cmd_cron "${2:-}" "${3:-}" ;;
+    cron)    cmd_cron "${2:-}" "${3:-}" "${4:-}" ;;
     help|-h|--help) cmd_help ;;
     *)       die "Unknown command: $1. Run: azprofile help" ;;
 esac

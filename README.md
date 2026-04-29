@@ -14,7 +14,12 @@ azprofile init personal    # Create another profile
 azprofile use work         # Switch to the 'work' profile
 azprofile list             # Show all profiles
 azprofile whoami           # Show active account details
-azprofile cron install     # Install hourly token refresh
+azprofile cron install                       # Refresh all profiles hourly
+azprofile cron install work "*/30 * * * *"   # Refresh 'work' every 30 min
+azprofile cron install personal "0 */2 * * *" # Refresh 'personal' every 2 hours
+azprofile cron remove work                   # Remove cron for 'work'
+azprofile cron remove                        # Remove all azprofile crons
+azprofile cron status                        # Show installed crons
 ```
 
 Profiles are stored in `~/.azure-profiles/`. The active profile is symlinked to `~/.azure`.
