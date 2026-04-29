@@ -134,6 +134,29 @@ cmd_init() {
     echo -e "${DIM}  Switch to it with: azprofile use ${name}${NC}"
 }
 
+cmd_login() {
+    local name="${1:-}"
+
+    # Default to active profile if none specified
+    if [ -z "$name" ]; then
+        name="$(get_current)"
+        [ "$name" != "(none)" ] && [ "$name" != "(unmigrated directory)" ] || \
+            die "No active profile. Specify one: azprofile login <name>"
+    fi
+
+    local target="$PROFILES_DIR/$name"
+    [ -d "$target" ] || die "Profile '$name' not found. Run: azprofile init $name"
+
+    echo -e "${BOLD}${BLUE}Re-authenticating profile '${name}'${NC}"
+    echo -e "${CYAN}${ARROW}${NC} Config dir: ${DIM}${target}${NC}"
+    echo
+
+    AZURE_CONFIG_DIR="$target" az login
+
+    echo
+    echo -e "${GREEN}${CHECK}${NC} Profile '${name}' re-authenticated."
+}
+
 cmd_whoami() {
     if ! command -v az &>/dev/null; then
         die "az CLI not found"
@@ -242,6 +265,7 @@ cmd_help() {
     echo -e "  ${BOLD}use <name>${NC}      Switch to a profile"
     echo -e "  ${BOLD}current${NC}         Show active profile"
     echo -e "  ${BOLD}init <name>${NC}     Create a profile and login"
+    echo -e "  ${BOLD}login [name]${NC}    Re-authenticate a profile (default: active)"
     echo -e "  ${BOLD}whoami${NC}          Show active account details"
     echo -e "  ${BOLD}cron install [profile] [schedule]${NC}"
     echo -e "                    Install token refresh cron (all profiles or specific one)"
@@ -256,6 +280,7 @@ case "${1:-help}" in
     use)     cmd_use "${2:-}" ;;
     current) cmd_current ;;
     init)    cmd_init "${2:-}" ;;
+    login)   cmd_login "${2:-}" ;;
     whoami)  cmd_whoami ;;
     cron)    cmd_cron "${2:-}" "${3:-}" "${4:-}" ;;
     help|-h|--help) cmd_help ;;

@@ -14,11 +14,11 @@ azprofile init personal    # Create another profile
 azprofile use work         # Switch to the 'work' profile
 azprofile list             # Show all profiles
 azprofile whoami           # Show active account details
+azprofile login                              # Re-authenticate the active profile
+azprofile login work                         # Re-authenticate 'work'
 azprofile cron install                       # Refresh all profiles hourly
 azprofile cron install work "*/30 * * * *"   # Refresh 'work' every 30 min
-azprofile cron install personal "0 */2 * * *" # Refresh 'personal' every 2 hours
 azprofile cron remove work                   # Remove cron for 'work'
-azprofile cron remove                        # Remove all azprofile crons
 azprofile cron status                        # Show installed crons
 ```
 
@@ -33,6 +33,24 @@ Refresh Azure tokens for all profiles (or specific ones). Designed to run from c
 ```bash
 azprofile-refresh              # Refresh all profiles
 azprofile-refresh work dev     # Refresh specific profiles
+```
+
+### azprofile-sync
+
+Sync Azure profile credentials to or from a remote directory (USB drive, NAS, network share, etc.).
+
+```bash
+azprofile-sync push /Volumes/backup          # Push active profile
+azprofile-sync push /Volumes/backup work     # Push 'work' profile
+azprofile-sync pull /Volumes/backup work     # Pull 'work' profile
+```
+
+Set `AZPROFILE_SYNC` to skip the directory argument:
+
+```bash
+export AZPROFILE_SYNC=/Volumes/backup
+azprofile-sync push
+azprofile-sync pull work
 ```
 
 ## Install
