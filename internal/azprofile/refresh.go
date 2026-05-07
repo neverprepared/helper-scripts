@@ -71,6 +71,7 @@ func Refresh(names []string) int {
 	}
 
 	failures := 0
+	var refreshed []string
 	if len(names) > 0 {
 		for _, name := range names {
 			if fi, err := os.Stat(ProfilePath(name)); err != nil || !fi.IsDir() {
@@ -79,21 +80,28 @@ func Refresh(names []string) int {
 				failures++
 				continue
 			}
-			if !refreshOne(name) {
+			if refreshOne(name) {
+				refreshed = append(refreshed, name)
+			} else {
 				failures++
 			}
 		}
-		return failures
+	} else {
+		entries, _ := os.ReadDir(ProfilesDir())
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if refreshOne(e.Name()) {
+				refreshed = append(refreshed, e.Name())
+			} else {
+				failures++
+			}
+		}
 	}
 
-	entries, _ := os.ReadDir(ProfilesDir())
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		if !refreshOne(e.Name()) {
-			failures++
-		}
+	for _, name := range refreshed {
+		PublishIfConfigured(name)
 	}
 	return failures
 }
