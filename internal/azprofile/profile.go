@@ -161,6 +161,7 @@ func Init(name string) error {
 
 	fmt.Printf("\n%s%s%s Profile '%s' initialized.\n", ui.Green, ui.Check, ui.NC, name)
 	fmt.Printf("%s  Switch to it with: azprofile use %s%s\n", ui.Dim, name, ui.NC)
+	PublishIfConfigured(name)
 	return nil
 }
 
@@ -184,6 +185,7 @@ func Login(name string) error {
 	}
 
 	fmt.Printf("\n%s%s%s Profile '%s' re-authenticated.\n", ui.Green, ui.Check, ui.NC, name)
+	PublishIfConfigured(name)
 	return nil
 }
 
