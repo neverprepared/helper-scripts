@@ -1,20 +1,31 @@
 PREFIX ?= $(HOME)/.local
+BIN_DIR := bin
+BINARY := $(BIN_DIR)/azprofile
+GO ?= go
+LDFLAGS ?= -s -w
 
-.PHONY: install uninstall list
+.PHONY: all build install uninstall clean list
 
-install:
+all: build
+
+build: $(BINARY)
+
+$(BINARY):
+	@mkdir -p $(BIN_DIR)
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/azprofile
+
+install: build
 	@mkdir -p $(PREFIX)/bin
-	@for f in bin/*; do \
-		ln -sf $(CURDIR)/$$f $(PREFIX)/bin/$$(basename $$f); \
-		echo "  linked $(PREFIX)/bin/$$(basename $$f)"; \
-	done
+	@ln -sf $(CURDIR)/$(BINARY) $(PREFIX)/bin/azprofile
+	@echo "  linked $(PREFIX)/bin/azprofile"
 
 uninstall:
-	@for f in bin/*; do \
-		rm -f $(PREFIX)/bin/$$(basename $$f); \
-		echo "  removed $(PREFIX)/bin/$$(basename $$f)"; \
-	done
+	@rm -f $(PREFIX)/bin/azprofile
+	@echo "  removed $(PREFIX)/bin/azprofile"
+
+clean:
+	@rm -rf $(BIN_DIR) dist
 
 list:
 	@echo "Available tools:"
-	@for f in bin/*; do echo "  $$(basename $$f)"; done
+	@echo "  azprofile (Go binary)"

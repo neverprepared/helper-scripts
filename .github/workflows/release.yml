@@ -14,16 +14,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create release archive
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build cross-platform binaries
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
-          ARCHIVE="helper-scripts-${VERSION}.zip"
-          zip -r "$ARCHIVE" bin/ Makefile README.md LICENSE
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p dist
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            outdir="dist/azprofile-${VERSION}-${GOOS}-${GOARCH}"
+            mkdir -p "$outdir"
+            GOOS="$GOOS" GOARCH="$GOARCH" CGO_ENABLED=0 \
+              go build -trimpath -ldflags "-s -w" \
+              -o "$outdir/azprofile" ./cmd/azprofile
+            cp README.md LICENSE "$outdir/"
+            tar -C dist -czf "dist/azprofile-${VERSION}-${GOOS}-${GOARCH}.tar.gz" "$(basename "$outdir")"
+          done
+          ( cd dist && shasum -a 256 *.tar.gz > "azprofile-${VERSION}-checksums.txt" )
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ARCHIVE }}
+          files: |
+            dist/*.tar.gz
+            dist/*-checksums.txt
           generate_release_notes: true
