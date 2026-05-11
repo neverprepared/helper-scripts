@@ -170,51 +170,73 @@ func pimCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "pim",
 		Short: "Privileged Identity Management role activation",
+		Long:  "Native PIM client. Talks directly to ARM and the RBAC PIM API; uses `az account get-access-token` for auth, so the active azprofile identity is the principal.",
 	}
 
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "Show eligible role assignments",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return azprofile.PimList()
+			typeFlag, _ := cmd.Flags().GetString("type")
+			return azprofile.PimList(typeFlag)
 		},
 	}
+	list.Flags().StringP("type", "t", "all", "Filter: all | resource | role | group")
 
 	active := &cobra.Command{
 		Use:   "active",
 		Short: "Show currently active roles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return azprofile.PimActive()
+			typeFlag, _ := cmd.Flags().GetString("type")
+			return azprofile.PimActive(typeFlag)
 		},
 	}
+	active.Flags().StringP("type", "t", "all", "Filter: all | resource | role | group")
 
 	activate := &cobra.Command{
 		Use:   "activate <name> [name...]",
 		Short: "Activate one or more eligible role assignments",
+		Long:  "Looks up <name> across resource, role, and group eligibility. Errors if the name is ambiguous across categories or roles within a category (use --type and --role to disambiguate).",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			role, _ := cmd.Flags().GetString("role")
-			duration, _ := cmd.Flags().GetInt("duration")
-			reason, _ := cmd.Flags().GetString("reason")
-			wait, _ := cmd.Flags().GetBool("wait")
-			return azprofile.PimActivate(args, role, duration, reason, wait)
+			opts := azprofile.ActivateOptions{}
+			opts.Type, _ = cmd.Flags().GetString("type")
+			opts.Role, _ = cmd.Flags().GetString("role")
+			opts.DurationMin, _ = cmd.Flags().GetInt("duration")
+			opts.Reason, _ = cmd.Flags().GetString("reason")
+			opts.StartDate, _ = cmd.Flags().GetString("start-date")
+			opts.StartTime, _ = cmd.Flags().GetString("start-time")
+			opts.TicketSystem, _ = cmd.Flags().GetString("ticket-system")
+			opts.TicketNumber, _ = cmd.Flags().GetString("ticket-number")
+			opts.Wait, _ = cmd.Flags().GetBool("wait")
+			opts.WaitTimeout, _ = cmd.Flags().GetInt("timeout")
+			return azprofile.PimActivate(args, opts)
 		},
 	}
-	activate.Flags().StringP("role", "r", "", "Role to activate if multiple exist (e.g. 'Owner', 'Contributor')")
+	activate.Flags().StringP("type", "t", "all", "Restrict lookup: all | resource | role | group")
+	activate.Flags().StringP("role", "r", "", "Role to activate when multiple exist for the same name")
 	activate.Flags().IntP("duration", "d", 480, "Duration in minutes")
 	activate.Flags().String("reason", "config", "Reason for activation")
+	activate.Flags().String("start-date", "", "Start date (DD/MM/YYYY); defaults to now")
+	activate.Flags().String("start-time", "", "Start time (HH:MM); defaults to now")
+	activate.Flags().String("ticket-system", "", "Ticket system name")
+	activate.Flags().String("ticket-number", "", "Ticket number")
 	activate.Flags().Bool("wait", true, "Wait for activation to complete")
+	activate.Flags().Int("timeout", 300, "Wait timeout in seconds")
 
 	deactivate := &cobra.Command{
 		Use:   "deactivate <name> [name...]",
 		Short: "Deactivate one or more active role assignments",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			role, _ := cmd.Flags().GetString("role")
-			return azprofile.PimDeactivate(args, role)
+			opts := azprofile.DeactivateOptions{}
+			opts.Type, _ = cmd.Flags().GetString("type")
+			opts.Role, _ = cmd.Flags().GetString("role")
+			return azprofile.PimDeactivate(args, opts)
 		},
 	}
-	deactivate.Flags().StringP("role", "r", "", "Role to deactivate if multiple exist")
+	deactivate.Flags().StringP("type", "t", "all", "Restrict lookup: all | resource | role | group")
+	deactivate.Flags().StringP("role", "r", "", "Role to deactivate when multiple exist for the same name")
 
 	c.AddCommand(list, active, activate, deactivate)
 	return c
