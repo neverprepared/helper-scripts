@@ -1,6 +1,8 @@
 package azprofile
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,9 +19,11 @@ import (
 
 // SyncedFiles is the minimal set of files required for `az` to authenticate
 // on a receiving machine without re-running `az login`.
+// msal_http_cache.bin is intentionally excluded — it's an MSAL HTTP response
+// cache (OIDC metadata, JWKS), not auth state, and MSAL rebuilds it on demand.
+// Including it pushed payloads over the Ably 64 KB message limit.
 var SyncedFiles = []string{
 	"msal_token_cache.json",
-	"msal_http_cache.bin",
 	"azureProfile.json",
 	"clouds.config",
 }
@@ -78,11 +83,41 @@ func BuildEnvelope(senderID, profile, upnHash string, seq int64, files map[strin
 	}
 }
 
+// Marshal returns the envelope as gzipped JSON. Gzip happens inside the
+// crypto envelope so the wire payload stays under Ably's 64 KB message
+// limit on profiles with large token caches.
 func (e *Envelope) Marshal() ([]byte, error) {
-	return json.Marshal(e)
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(raw); err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
+// UnmarshalEnvelope parses an envelope from either gzipped or raw JSON.
+// The gzip magic bytes (0x1f 0x8b) disambiguate at decode time, so messages
+// published before gzip was introduced still decode.
 func UnmarshalEnvelope(b []byte) (*Envelope, error) {
+	if len(b) >= 2 && b[0] == 0x1f && b[1] == 0x8b {
+		gz, err := gzip.NewReader(bytes.NewReader(b))
+		if err != nil {
+			return nil, fmt.Errorf("gunzip envelope: %w", err)
+		}
+		defer gz.Close()
+		raw, err := io.ReadAll(gz)
+		if err != nil {
+			return nil, fmt.Errorf("read gunzipped envelope: %w", err)
+		}
+		b = raw
+	}
 	var e Envelope
 	if err := json.Unmarshal(b, &e); err != nil {
 		return nil, err

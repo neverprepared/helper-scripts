@@ -32,7 +32,7 @@ azprofile sync push /Volumes/backup          # Push active profile (rsync)
 azprofile sync push /Volumes/backup work     # Push 'work' profile (rsync)
 azprofile sync pull /Volumes/backup work     # Pull 'work' profile (rsync)
 
-# Sync between machines via Ably pub/sub (encrypted, ~30 KB per push)
+# Sync between machines via Ably pub/sub (encrypted + gzipped)
 azprofile sync keygen                        # Generate master key, store in OS keychain
 azprofile sync configure --ably-key APP.KEY:SECRET --channel-prefix mygroup
 azprofile sync push --ably work              # Encrypt + publish 'work' tokens
@@ -63,7 +63,7 @@ Profiles are stored in `~/.azure-profiles/`. The active profile is symlinked to 
 
 ## Ably pub/sub sync
 
-Use this mode when you want to keep multiple personal machines on the same Azure tokens without carrying a USB stick or running rsync over a VPN. Only the four files Azure CLI needs to authenticate (`msal_token_cache.json`, `msal_http_cache.bin`, `azureProfile.json`, `clouds.config`) travel — telemetry, command indexes, and logs stay local.
+Use this mode when you want to keep multiple personal machines on the same Azure tokens without carrying a USB stick or running rsync over a VPN. Only the files Azure CLI needs to authenticate (`msal_token_cache.json`, `azureProfile.json`, `clouds.config`) travel — telemetry, command indexes, and logs stay local. `msal_http_cache.bin` is *not* synced; MSAL rebuilds it on first use. Payloads are gzipped inside the AES-GCM envelope to stay under Ably's 64 KB message limit.
 
 The published payload is encrypted with AES-256-GCM **before** it leaves your machine. Ably never sees plaintext. The same key encrypts the local `~/.config/azprofile/config.enc`, so the Ably API key is also unreadable at rest.
 
