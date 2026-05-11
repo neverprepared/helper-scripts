@@ -40,10 +40,12 @@ azprofile sync pull --ably work              # Read latest message and apply
 azprofile sync subscribe work                # Long-running daemon (apply as they arrive)
 azprofile sync status                        # Show non-secret config + key fingerprint
 
-# Azure PIM role activation (requires az-pim-cli)
-azprofile pim list                                       # Eligible role assignments
-azprofile pim active                                     # Currently active roles
-azprofile pim activate myresource --role Owner           # Activate a role
+# Azure PIM role activation (native — talks directly to ARM + PIM RBAC)
+azprofile pim list                                       # Eligible (resource + Entra roles + AAD groups)
+azprofile pim list --type resource                       # Filter by category
+azprofile pim active                                     # Currently active assignments
+azprofile pim activate myresource                        # Auto-detects category
+azprofile pim activate myresource --role Owner           # Disambiguate when multiple roles match
 azprofile pim activate r1 r2 --duration 60 --reason ops  # Activate multiple, custom duration
 azprofile pim deactivate myresource                      # Release an active role
 ```
@@ -154,7 +156,7 @@ make uninstall
 - `rsync` (for the rsync sync mode)
 - An Ably account + API key (only for the Ably sync mode — free tier is plenty for personal use)
 - macOS Keychain or Linux secret-service (or set `AZPROFILE_MASTER_KEY` to bypass)
-- `az-pim-cli` on `$PATH` (only for the `pim` subcommands)
+- `az` CLI logged in (`pim` uses `az account get-access-token` for auth)
 
 ## License
 
