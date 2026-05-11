@@ -30,6 +30,7 @@ func main() {
 		cronCmd(),
 		refreshCmd(),
 		syncCmd(),
+		pimCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
@@ -163,6 +164,60 @@ func refreshCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func pimCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "pim",
+		Short: "Privileged Identity Management role activation",
+	}
+
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "Show eligible role assignments",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return azprofile.PimList()
+		},
+	}
+
+	active := &cobra.Command{
+		Use:   "active",
+		Short: "Show currently active roles",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return azprofile.PimActive()
+		},
+	}
+
+	activate := &cobra.Command{
+		Use:   "activate <name> [name...]",
+		Short: "Activate one or more eligible role assignments",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			role, _ := cmd.Flags().GetString("role")
+			duration, _ := cmd.Flags().GetInt("duration")
+			reason, _ := cmd.Flags().GetString("reason")
+			wait, _ := cmd.Flags().GetBool("wait")
+			return azprofile.PimActivate(args, role, duration, reason, wait)
+		},
+	}
+	activate.Flags().StringP("role", "r", "", "Role to activate if multiple exist (e.g. 'Owner', 'Contributor')")
+	activate.Flags().IntP("duration", "d", 480, "Duration in minutes")
+	activate.Flags().String("reason", "config", "Reason for activation")
+	activate.Flags().Bool("wait", true, "Wait for activation to complete")
+
+	deactivate := &cobra.Command{
+		Use:   "deactivate <name> [name...]",
+		Short: "Deactivate one or more active role assignments",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			role, _ := cmd.Flags().GetString("role")
+			return azprofile.PimDeactivate(args, role)
+		},
+	}
+	deactivate.Flags().StringP("role", "r", "", "Role to deactivate if multiple exist")
+
+	c.AddCommand(list, active, activate, deactivate)
+	return c
 }
 
 func syncCmd() *cobra.Command {
