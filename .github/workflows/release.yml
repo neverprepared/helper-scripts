@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -32,9 +32,70 @@ jobs:
               go build -trimpath -ldflags "-s -w" \
               -o "$outdir/azprofile" ./cmd/azprofile
             cp README.md LICENSE "$outdir/"
-            tar -C dist -czf "dist/azprofile-${VERSION}-${GOOS}-${GOARCH}.tar.gz" "$(basename "$outdir")"
           done
-          ( cd dist && shasum -a 256 *.tar.gz > "azprofile-${VERSION}-checksums.txt" )
+
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$MACOS_CERTIFICATE_PWD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PWD" \
+            "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+
+      # Raw Mach-O binaries can't be stapled (stapler only handles .app/.pkg/.dmg).
+      # Gatekeeper verifies the notarization online on first launch instead.
+      - name: Sign and notarize darwin binaries
+        env:
+          MACOS_IDENTITY: ${{ secrets.MACOS_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          for arch in amd64 arm64; do
+            bin="dist/azprofile-${VERSION}-darwin-${arch}/azprofile"
+
+            codesign --force --timestamp --options runtime \
+              --sign "$MACOS_IDENTITY" "$bin"
+            codesign --verify --strict --verbose=2 "$bin"
+
+            zip="$RUNNER_TEMP/azprofile-${arch}-notarize.zip"
+            ditto -c -k "$bin" "$zip"
+
+            xcrun notarytool submit "$zip" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+          done
+
+      - name: Package tarballs and checksums
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            name="azprofile-${VERSION}-${GOOS}-${GOARCH}"
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          done
+          ( cd dist && shasum -a 256 -- *.tar.gz > "azprofile-${VERSION}-checksums.txt" )
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
