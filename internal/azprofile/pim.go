@@ -415,23 +415,23 @@ func resolveActivate(name, roleFilter string,
 ) (*activateTarget, error) {
 	var resMatches []pim.ResourceAssignment
 	for i := range resource {
-		if eligibleResourceName(&resource[i]) == name {
-			if roleFilter == "" || resourceRoleName(&resource[i]) == roleFilter {
+		if strings.EqualFold(eligibleResourceName(&resource[i]), name) {
+			if roleFilter == "" || strings.EqualFold(resourceRoleName(&resource[i]), roleFilter) {
 				resMatches = append(resMatches, resource[i])
 			}
 		}
 	}
 	var entraMatches, groupMatches []pim.GovernanceRoleAssignment
 	for i := range entra {
-		if govName(&entra[i]) == name {
-			if roleFilter == "" || govRoleName(&entra[i]) == roleFilter {
+		if strings.EqualFold(govName(&entra[i]), name) {
+			if roleFilter == "" || strings.EqualFold(govRoleName(&entra[i]), roleFilter) {
 				entraMatches = append(entraMatches, entra[i])
 			}
 		}
 	}
 	for i := range group {
-		if govName(&group[i]) == name {
-			if roleFilter == "" || govRoleName(&group[i]) == roleFilter {
+		if strings.EqualFold(govName(&group[i]), name) {
+			if roleFilter == "" || strings.EqualFold(govRoleName(&group[i]), roleFilter) {
 				groupMatches = append(groupMatches, group[i])
 			}
 		}
@@ -448,7 +448,7 @@ func resolveActivate(name, roleFilter string,
 		categories++
 	}
 	if categories == 0 {
-		return nil, errors.New("no eligible assignment matches (run `azprofile pim list`)")
+		return nil, fmt.Errorf("no eligible assignment matches %q.\n%s", name, suggestEligibleNames(name, resource, entra, group))
 	}
 	if categories > 1 {
 		return nil, errors.New("ambiguous — matches in multiple categories; pass --type=resource|role|group")
@@ -480,23 +480,23 @@ func resolveDeactivate(name, roleFilter string,
 ) (*deactivateTarget, error) {
 	var resMatches []pim.ActiveResourceAssignment
 	for i := range resource {
-		if activeResourceName(&resource[i]) == name {
-			if roleFilter == "" || activeResourceRoleName(&resource[i]) == roleFilter {
+		if strings.EqualFold(activeResourceName(&resource[i]), name) {
+			if roleFilter == "" || strings.EqualFold(activeResourceRoleName(&resource[i]), roleFilter) {
 				resMatches = append(resMatches, resource[i])
 			}
 		}
 	}
 	var entraMatches, groupMatches []pim.GovernanceRoleAssignment
 	for i := range entra {
-		if govName(&entra[i]) == name {
-			if roleFilter == "" || govRoleName(&entra[i]) == roleFilter {
+		if strings.EqualFold(govName(&entra[i]), name) {
+			if roleFilter == "" || strings.EqualFold(govRoleName(&entra[i]), roleFilter) {
 				entraMatches = append(entraMatches, entra[i])
 			}
 		}
 	}
 	for i := range group {
-		if govName(&group[i]) == name {
-			if roleFilter == "" || govRoleName(&group[i]) == roleFilter {
+		if strings.EqualFold(govName(&group[i]), name) {
+			if roleFilter == "" || strings.EqualFold(govRoleName(&group[i]), roleFilter) {
 				groupMatches = append(groupMatches, group[i])
 			}
 		}
@@ -512,7 +512,7 @@ func resolveDeactivate(name, roleFilter string,
 		categories++
 	}
 	if categories == 0 {
-		return nil, errors.New("no active assignment matches (run `azprofile pim active`)")
+		return nil, fmt.Errorf("no active assignment matches %q.\n%s", name, suggestActiveNames(name, resource, entra, group))
 	}
 	if categories > 1 {
 		return nil, errors.New("ambiguous — matches in multiple categories; pass --type")
@@ -582,6 +582,84 @@ func govRoleName(g *pim.GovernanceRoleAssignment) string {
 		return ""
 	}
 	return g.RoleDefinition.DisplayName
+}
+
+// suggestEligibleNames returns a short hint listing the eligible names that
+// are close to query (case-insensitive substring) — or the full sorted list
+// if nothing's close. Helps users realize they typed the wrong case or a
+// near-but-not-equal name without forcing them to run `pim list` separately.
+func suggestEligibleNames(query string,
+	resource []pim.ResourceAssignment, entra, group []pim.GovernanceRoleAssignment,
+) string {
+	names := []string{}
+	for i := range resource {
+		if n := eligibleResourceName(&resource[i]); n != "" {
+			names = append(names, n)
+		}
+	}
+	for i := range entra {
+		if n := govName(&entra[i]); n != "" {
+			names = append(names, n)
+		}
+	}
+	for i := range group {
+		if n := govName(&group[i]); n != "" {
+			names = append(names, n)
+		}
+	}
+	return formatNameSuggestion(query, names, "eligible")
+}
+
+func suggestActiveNames(query string,
+	resource []pim.ActiveResourceAssignment, entra, group []pim.GovernanceRoleAssignment,
+) string {
+	names := []string{}
+	for i := range resource {
+		if n := activeResourceName(&resource[i]); n != "" {
+			names = append(names, n)
+		}
+	}
+	for i := range entra {
+		if n := govName(&entra[i]); n != "" {
+			names = append(names, n)
+		}
+	}
+	for i := range group {
+		if n := govName(&group[i]); n != "" {
+			names = append(names, n)
+		}
+	}
+	return formatNameSuggestion(query, names, "active")
+}
+
+func formatNameSuggestion(query string, names []string, label string) string {
+	uniq := map[string]struct{}{}
+	for _, n := range names {
+		uniq[n] = struct{}{}
+	}
+	flat := make([]string, 0, len(uniq))
+	for n := range uniq {
+		flat = append(flat, n)
+	}
+	sort.Strings(flat)
+	if len(flat) == 0 {
+		return fmt.Sprintf("  (no %s assignments)", label)
+	}
+
+	q := strings.ToLower(query)
+	var close []string
+	for _, n := range flat {
+		if strings.Contains(strings.ToLower(n), q) {
+			close = append(close, n)
+		}
+	}
+	if len(close) > 0 {
+		return "  did you mean: " + strings.Join(close, ", ")
+	}
+	if len(flat) > 10 {
+		return fmt.Sprintf("  %s names: %s, ... (%d total)", label, strings.Join(flat[:10], ", "), len(flat))
+	}
+	return fmt.Sprintf("  %s names: %s", label, strings.Join(flat, ", "))
 }
 
 func describeResourceRoles(rs []pim.ResourceAssignment) string {

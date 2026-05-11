@@ -79,6 +79,41 @@ func TestResolveActivateNoMatch(t *testing.T) {
 	}
 }
 
+func TestResolveActivateCaseInsensitive(t *testing.T) {
+	// Display name in Azure is mixed-case; user types lowercase.
+	res := []pim.ResourceAssignment{eligibleResource("ESLCD", "Contributor")}
+	target, err := resolveActivate("eslcd", "contributor", res, nil, nil)
+	if err != nil {
+		t.Fatalf("case-insensitive match should succeed: %v", err)
+	}
+	if target.kind != "resource" {
+		t.Fatalf("kind=%q", target.kind)
+	}
+}
+
+func TestSuggestEligibleNamesSuggestsClose(t *testing.T) {
+	res := []pim.ResourceAssignment{
+		eligibleResource("ESLCD", "Owner"),
+		eligibleResource("ESL-Prod", "Owner"),
+		eligibleResource("Sandbox", "Owner"),
+	}
+	got := suggestEligibleNames("esl", res, nil, nil)
+	if !strings.Contains(got, "ESLCD") || !strings.Contains(got, "ESL-Prod") {
+		t.Fatalf("expected ESLCD and ESL-Prod in suggestion, got: %q", got)
+	}
+	if strings.Contains(got, "Sandbox") {
+		t.Fatalf("Sandbox is not close to 'esl', should not be suggested: %q", got)
+	}
+}
+
+func TestSuggestEligibleNamesFallsBackToFullList(t *testing.T) {
+	res := []pim.ResourceAssignment{eligibleResource("Sandbox", "Owner")}
+	got := suggestEligibleNames("totally-unrelated", res, nil, nil)
+	if !strings.Contains(got, "Sandbox") {
+		t.Fatalf("with no close match, expected full list to include Sandbox, got: %q", got)
+	}
+}
+
 func TestResolveActivateGovernanceUnique(t *testing.T) {
 	entra := []pim.GovernanceRoleAssignment{eligibleGov("global-admin", "Global Administrator")}
 	target, err := resolveActivate("global-admin", "", nil, entra, nil)
