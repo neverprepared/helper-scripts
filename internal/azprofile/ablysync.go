@@ -13,7 +13,7 @@ import (
 
 	"github.com/ably/ably-go/ably"
 
-	"github.com/neverprepared/helper-scripts/internal/ui"
+	"github.com/neverprepared/azprofile/internal/ui"
 )
 
 // resolveProfileForSync picks the profile to sync. Falls back to the active

@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/neverprepared/helper-scripts/internal/azprofile"
-	"github.com/neverprepared/helper-scripts/internal/ui"
+	"github.com/neverprepared/azprofile/internal/azprofile"
+	"github.com/neverprepared/azprofile/internal/ui"
 )
 
 func main() {

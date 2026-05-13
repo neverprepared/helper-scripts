@@ -1,4 +1,4 @@
-# helper-scripts
+# azprofile
 
 A collection of CLI tools for common development tasks.
 
@@ -118,7 +118,7 @@ The channel name is `<prefix>.<sha256(upn)[:12]>.<profile>` — derived from the
 
 ### From release
 
-Download the latest release tarball for your OS/arch from [Releases](https://github.com/neverprepared/helper-scripts/releases), extract it, and put `azprofile` on your `PATH`:
+Download the latest release tarball for your OS/arch from [Releases](https://github.com/neverprepared/azprofile/releases), extract it, and put `azprofile` on your `PATH`:
 
 ```bash
 tar -xzf azprofile-vX.Y.Z-darwin-arm64.tar.gz
@@ -130,8 +130,8 @@ Make sure `~/.local/bin` is on your `PATH`.
 ### From source
 
 ```bash
-git clone https://github.com/neverprepared/helper-scripts.git
-cd helper-scripts
+git clone https://github.com/neverprepared/azprofile.git
+cd azprofile
 make install
 ```
 

@@ -1,5 +1,5 @@
-azprofile (helper-scripts)
-==========================
+azprofile
+=========
 
 The `internal/azprofile/pim/` package is derived from
 github.com/neverprepared/az-pim-cli (a fork of github.com/netr0m/az-pim-cli),

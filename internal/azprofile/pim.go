@@ -10,8 +10,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/neverprepared/helper-scripts/internal/azprofile/pim"
-	"github.com/neverprepared/helper-scripts/internal/ui"
+	"github.com/neverprepared/azprofile/internal/azprofile/pim"
+	"github.com/neverprepared/azprofile/internal/ui"
 )
 
 // PimTypeAll matches any of the three PIM categories.

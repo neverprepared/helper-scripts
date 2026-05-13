@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/neverprepared/helper-scripts/internal/ui"
+	"github.com/neverprepared/azprofile/internal/ui"
 )
 
 func ensureCronPath() {

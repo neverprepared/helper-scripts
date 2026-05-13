@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/neverprepared/helper-scripts/internal/ui"
+	"github.com/neverprepared/azprofile/internal/ui"
 )
 
 func Sync(action, remoteDir, profile string) error {

@@ -1,4 +1,4 @@
-module github.com/neverprepared/helper-scripts
+module github.com/neverprepared/azprofile
 
 go 1.26.2
 

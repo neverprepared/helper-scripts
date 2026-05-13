@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/neverprepared/helper-scripts/internal/azprofile/pim"
+	"github.com/neverprepared/azprofile/internal/azprofile/pim"
 )
 
 func eligibleResource(name, role string) pim.ResourceAssignment {
