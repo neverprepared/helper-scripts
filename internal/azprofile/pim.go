@@ -64,6 +64,7 @@ func validateType(t string) (string, error) {
 
 // PimList prints eligible assignments. typeFilter is one of all/resource/role/group.
 func PimList(typeFilter string) error {
+	EnsureCronPath()
 	t, err := validateType(typeFilter)
 	if err != nil {
 		return err
@@ -105,6 +106,7 @@ func PimList(typeFilter string) error {
 
 // PimActive prints currently-active assignments.
 func PimActive(typeFilter string) error {
+	EnsureCronPath()
 	t, err := validateType(typeFilter)
 	if err != nil {
 		return err
@@ -149,6 +151,7 @@ func PimActive(typeFilter string) error {
 // on ambiguity. When the chosen resource has multiple eligible roles, opts.Role
 // disambiguates.
 func PimActivate(names []string, opts ActivateOptions) error {
+	EnsureCronPath()
 	t, err := validateType(opts.Type)
 	if err != nil {
 		return err
@@ -196,6 +199,7 @@ func PimActivate(names []string, opts ActivateOptions) error {
 
 // PimDeactivate releases currently-active assignments by name.
 func PimDeactivate(names []string, opts DeactivateOptions) error {
+	EnsureCronPath()
 	t, err := validateType(opts.Type)
 	if err != nil {
 		return err

@@ -148,7 +148,59 @@ func cronCmd() *cobra.Command {
 		},
 	}
 
-	c.AddCommand(install, remove, status)
+	c.AddCommand(install, remove, status, cronPIMCmd())
+	return c
+}
+
+func cronPIMCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "pim",
+		Short: "Manage daily PIM role activation crons",
+	}
+
+	var (
+		pimSchedule     string
+		pimDuration     int
+		pimReason       string
+		pimTicketSystem string
+		pimTicketNumber string
+	)
+
+	install := &cobra.Command{
+		Use:   "install <profile> <role>...",
+		Short: "Install a cron that activates one or more PIM roles for a profile",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profile := args[0]
+			roles := args[1:]
+			return azprofile.CronPIMInstall(profile, pimSchedule, roles, azprofile.PIMCronOpts{
+				Duration:     pimDuration,
+				Reason:       pimReason,
+				TicketSystem: pimTicketSystem,
+				TicketNumber: pimTicketNumber,
+			})
+		},
+	}
+	install.Flags().StringVar(&pimSchedule, "schedule", "", "Cron schedule (default \"30 8 * * *\")")
+	install.Flags().IntVarP(&pimDuration, "duration", "d", azprofile.DefaultPIMDuration, "Activation duration in minutes")
+	install.Flags().StringVar(&pimReason, "reason", azprofile.DefaultPIMReason, "Activation reason")
+	install.Flags().StringVar(&pimTicketSystem, "ticket-system", "", "Ticket system name")
+	install.Flags().StringVar(&pimTicketNumber, "ticket-number", "", "Ticket number")
+
+	remove := &cobra.Command{
+		Use:   "remove [profile]",
+		Short: "Remove PIM cron (specific profile, or all if omitted)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profile := ""
+			if len(args) == 1 {
+				profile = args[0]
+			}
+			return azprofile.CronPIMRemove(profile)
+		},
+	}
+
+	c.AddCommand(install, remove)
 	return c
 }
 

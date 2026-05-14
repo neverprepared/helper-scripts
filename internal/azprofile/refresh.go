@@ -11,7 +11,10 @@ import (
 	"github.com/neverprepared/azprofile/internal/ui"
 )
 
-func ensureCronPath() {
+// EnsureCronPath prepends common Homebrew/system bin directories to PATH if not
+// already present. Required because cron jobs run with a minimal PATH that often
+// excludes `az` and other tools. Safe to call multiple times.
+func EnsureCronPath() {
 	sep := string(os.PathListSeparator)
 	current := os.Getenv("PATH")
 	parts := strings.Split(current, sep)
@@ -58,7 +61,7 @@ func refreshOne(name string) bool {
 // Refresh refreshes tokens for the given profiles, or all profiles if names is empty.
 // Returns the number of failures (intended to be used as the process exit code).
 func Refresh(names []string) int {
-	ensureCronPath()
+	EnsureCronPath()
 
 	fmt.Printf("[%s] %s%s%s Azure Token Refresh%s\n",
 		time.Now().Format("2006-01-02 15:04:05"),
