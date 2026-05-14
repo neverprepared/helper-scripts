@@ -10,6 +10,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/neverprepared/azprofile/internal/azprofile/pim"
 	"github.com/neverprepared/azprofile/internal/ui"
 )
@@ -29,7 +31,7 @@ var validPimTypes = map[string]bool{
 // ActivateOptions are the user-supplied flags for `azprofile pim activate`.
 type ActivateOptions struct {
 	Type         string // "" or "all" → search all types
-	Role         string // optional role-name disambiguator
+	Role         string // optional role-name disambiguator (also acts as filter when All)
 	DurationMin  int
 	Reason       string
 	StartDate    string // DD/MM/YYYY
@@ -38,6 +40,8 @@ type ActivateOptions struct {
 	TicketNumber string
 	Wait         bool
 	WaitTimeout  int
+	All          bool // activate every eligible assignment (gated by Type/Role)
+	Yes          bool // skip the interactive confirmation prompt in --all mode
 }
 
 // DeactivateOptions are the user-supplied flags for `azprofile pim deactivate`.
@@ -146,15 +150,22 @@ func PimActive(typeFilter string) error {
 	return nil
 }
 
-// PimActivate activates one or more eligible assignments by name. When opts.Type
-// is "all" or empty, the lookup searches across all three categories and errors
-// on ambiguity. When the chosen resource has multiple eligible roles, opts.Role
-// disambiguates.
+// PimActivate activates eligible assignments. With opts.All set, it activates
+// every eligibility filtered by opts.Type (and optionally opts.Role); otherwise
+// it resolves each name in `names`. Type "all"/"" searches all three categories
+// and errors on ambiguity. opts.Role disambiguates a name with multiple eligible
+// roles; in --all mode it acts as a role-name filter instead.
 func PimActivate(names []string, opts ActivateOptions) error {
 	EnsureCronPath()
 	t, err := validateType(opts.Type)
 	if err != nil {
 		return err
+	}
+	if opts.All && len(names) > 0 {
+		return errors.New("--all is mutually exclusive with positional role names")
+	}
+	if !opts.All && len(names) == 0 {
+		return errors.New("no role names provided; pass names or use --all")
 	}
 	if opts.DurationMin <= 0 {
 		opts.DurationMin = pim.DefaultDurationMinutes
@@ -182,6 +193,46 @@ func PimActivate(names []string, opts ActivateOptions) error {
 		return err
 	}
 
+	if opts.All {
+		targets := collectAllEligible(t, opts.Role, resourceEligible, entraEligible, groupEligible)
+		if len(targets) == 0 {
+			return errors.New("no eligible assignments found for the given filters")
+		}
+		if !opts.Yes && term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Printf("\nAbout to activate %d assignment(s):\n", len(targets))
+			for _, tgt := range targets {
+				fmt.Printf("  - %s (%s)\n", tgt.displayName(), tgt.kind)
+			}
+			fmt.Print("Continue? [y/N] ")
+			var resp string
+			_, _ = fmt.Scanln(&resp)
+			if strings.TrimSpace(strings.ToLower(resp)) != "y" {
+				return errors.New("cancelled")
+			}
+		}
+		var firstErr error
+		failures := 0
+		for _, tgt := range targets {
+			name := tgt.displayName()
+			fmt.Printf("\n%s%s%s Activating %s%s%s (%s)\n",
+				ui.Cyan, ui.Arrow, ui.NC, ui.Bold, name, ui.NC, tgt.kind)
+			if err := tgt.activate(ctx, c, subjectID, armToken, rbacToken, opts); err != nil {
+				fmt.Printf("  %s%s%s %s: %s\n", ui.Red, ui.Cross, ui.NC, name, err.Error())
+				failures++
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%s: %w", name, err)
+				}
+				continue
+			}
+			fmt.Printf("%s%s%s Activation complete\n", ui.Green, ui.Check, ui.NC)
+		}
+		if failures > 0 {
+			fmt.Printf("\n%s%s%s %d of %d activation(s) failed\n",
+				ui.Yellow, ui.Cross, ui.NC, failures, len(targets))
+		}
+		return firstErr
+	}
+
 	for _, name := range names {
 		match, err := resolveActivate(name, opts.Role, resourceEligible, entraEligible, groupEligible)
 		if err != nil {
@@ -195,6 +246,39 @@ func PimActivate(names []string, opts ActivateOptions) error {
 		fmt.Printf("%s%s%s Activation complete\n", ui.Green, ui.Check, ui.NC)
 	}
 	return nil
+}
+
+// collectAllEligible builds an activateTarget for every eligibility passing the
+// type and (optional) role-name filter. Role filter is case-insensitive.
+func collectAllEligible(typeFilter, roleFilter string,
+	resource []pim.ResourceAssignment, entra, group []pim.GovernanceRoleAssignment,
+) []*activateTarget {
+	var out []*activateTarget
+	if typeFilter == PimTypeAll || typeFilter == PimTypeResource {
+		for i := range resource {
+			if roleFilter != "" && !strings.EqualFold(resourceRoleName(&resource[i]), roleFilter) {
+				continue
+			}
+			out = append(out, &activateTarget{kind: "resource", resource: &resource[i]})
+		}
+	}
+	if typeFilter == PimTypeAll || typeFilter == PimTypeRole {
+		for i := range entra {
+			if roleFilter != "" && !strings.EqualFold(govRoleName(&entra[i]), roleFilter) {
+				continue
+			}
+			out = append(out, &activateTarget{kind: "Entra role", gov: &entra[i], roleType: pim.RoleTypeEntraRoles})
+		}
+	}
+	if typeFilter == PimTypeAll || typeFilter == PimTypeGroup {
+		for i := range group {
+			if roleFilter != "" && !strings.EqualFold(govRoleName(&group[i]), roleFilter) {
+				continue
+			}
+			out = append(out, &activateTarget{kind: "AAD group", gov: &group[i], roleType: pim.RoleTypeAADGroups})
+		}
+	}
+	return out
 }
 
 // PimDeactivate releases currently-active assignments by name.
@@ -330,6 +414,13 @@ type activateTarget struct {
 	resource *pim.ResourceAssignment       // set when kind == "resource"
 	gov      *pim.GovernanceRoleAssignment // set when kind != "resource"
 	roleType string                        // pim.RoleTypeEntraRoles / RoleTypeAADGroups (when gov)
+}
+
+func (t *activateTarget) displayName() string {
+	if t.kind == "resource" {
+		return eligibleResourceName(t.resource)
+	}
+	return govName(t.gov)
 }
 
 func (t *activateTarget) activate(ctx context.Context, c *pim.Client, subjectID, armToken, rbacToken string, opts ActivateOptions) error {

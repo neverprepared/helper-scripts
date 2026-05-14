@@ -174,6 +174,9 @@ func CronInstall(profile, schedule string) error {
 
 // PIMCronOpts configures the activate invocation baked into a pim cron entry.
 type PIMCronOpts struct {
+	All          bool   // when true, omit positional roles and use `pim activate --all --yes`
+	Type         string // optional --type filter (resource/role/group/all)
+	Role         string // optional --role filter (works with --all or as disambiguator)
 	Duration     int
 	Reason       string
 	TicketSystem string
@@ -184,8 +187,11 @@ func CronPIMInstall(profile, schedule string, roles []string, opts PIMCronOpts) 
 	if profile == "" {
 		return fmt.Errorf("profile required for pim cron")
 	}
-	if len(roles) == 0 {
-		return fmt.Errorf("at least one role required")
+	if opts.All && len(roles) > 0 {
+		return fmt.Errorf("--all is mutually exclusive with positional role names")
+	}
+	if !opts.All && len(roles) == 0 {
+		return fmt.Errorf("at least one role required, or pass --all")
 	}
 	if fi, err := os.Stat(ProfilePath(profile)); err != nil || !fi.IsDir() {
 		return fmt.Errorf("Profile '%s' not found. Run: azprofile init %s", profile, profile)
@@ -205,10 +211,22 @@ func CronPIMInstall(profile, schedule string, roles []string, opts PIMCronOpts) 
 		return err
 	}
 
-	var roleArgs strings.Builder
-	for _, r := range roles {
-		roleArgs.WriteString(" ")
-		roleArgs.WriteString(shellQuote(r))
+	var activateArgs strings.Builder
+	if opts.All {
+		activateArgs.WriteString(" --all --yes")
+		if opts.Type != "" && opts.Type != "all" {
+			activateArgs.WriteString(" --type ")
+			activateArgs.WriteString(shellQuote(opts.Type))
+		}
+		if opts.Role != "" {
+			activateArgs.WriteString(" --role ")
+			activateArgs.WriteString(shellQuote(opts.Role))
+		}
+	} else {
+		for _, r := range roles {
+			activateArgs.WriteString(" ")
+			activateArgs.WriteString(shellQuote(r))
+		}
 	}
 
 	extra := ""
@@ -225,7 +243,7 @@ func CronPIMInstall(profile, schedule string, roles []string, opts PIMCronOpts) 
 		schedule, homeExpr,
 		homeExpr, profile,
 		exe, profile,
-		exe, roleArgs.String(),
+		exe, activateArgs.String(),
 		shellQuote(opts.Reason), opts.Duration, extra,
 		homeExpr, tag,
 	)
@@ -240,10 +258,20 @@ func CronPIMInstall(profile, schedule string, roles []string, opts PIMCronOpts) 
 		fmt.Printf("%s%s%s WORKSPACE_HOME=%s set in crontab\n",
 			ui.Green, ui.Check, ui.NC, os.Getenv("WORKSPACE_HOME"))
 	}
+	rolesDesc := strings.Join(roles, ", ")
+	if opts.All {
+		rolesDesc = "all eligible"
+		if opts.Type != "" && opts.Type != "all" {
+			rolesDesc += " (" + opts.Type + ")"
+		}
+		if opts.Role != "" {
+			rolesDesc += " matching '" + opts.Role + "'"
+		}
+	}
 	fmt.Printf("%s%s%s PIM cron installed for profile %s'%s'%s, roles: %s%s%s schedule: %s%s%s\n",
 		ui.Green, ui.Check, ui.NC,
 		ui.Bold, profile, ui.NC,
-		ui.Bold, strings.Join(roles, ", "), ui.NC,
+		ui.Bold, rolesDesc, ui.NC,
 		ui.Dim, schedule, ui.NC)
 	fmt.Printf("%s  Log: %s/.azure-profiles/pim.log%s\n", ui.Dim, displayHome(), ui.NC)
 	return nil

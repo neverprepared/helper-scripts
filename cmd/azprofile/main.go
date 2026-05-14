@@ -164,16 +164,23 @@ func cronPIMCmd() *cobra.Command {
 		pimReason       string
 		pimTicketSystem string
 		pimTicketNumber string
+		pimAll          bool
+		pimType         string
+		pimRole         string
 	)
 
 	install := &cobra.Command{
-		Use:   "install <profile> <role>...",
-		Short: "Install a cron that activates one or more PIM roles for a profile",
-		Args:  cobra.MinimumNArgs(2),
+		Use:   "install <profile> <role>... | <profile> --all",
+		Short: "Install a cron that activates PIM roles for a profile",
+		Long:  "Installs a daily cron that refreshes tokens and activates PIM role assignments. Pass role names as positional args, or --all to activate every eligibility (filtered by --type / --role).",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile := args[0]
 			roles := args[1:]
 			return azprofile.CronPIMInstall(profile, pimSchedule, roles, azprofile.PIMCronOpts{
+				All:          pimAll,
+				Type:         pimType,
+				Role:         pimRole,
 				Duration:     pimDuration,
 				Reason:       pimReason,
 				TicketSystem: pimTicketSystem,
@@ -186,6 +193,9 @@ func cronPIMCmd() *cobra.Command {
 	install.Flags().StringVar(&pimReason, "reason", azprofile.DefaultPIMReason, "Activation reason")
 	install.Flags().StringVar(&pimTicketSystem, "ticket-system", "", "Ticket system name")
 	install.Flags().StringVar(&pimTicketNumber, "ticket-number", "", "Ticket number")
+	install.Flags().BoolVar(&pimAll, "all", false, "Activate every eligible assignment (filtered by --type / --role)")
+	install.Flags().StringVarP(&pimType, "type", "t", "", "With --all: restrict to all | resource | role | group")
+	install.Flags().StringVarP(&pimRole, "role", "r", "", "With --all: only activate eligibilities whose role name matches this")
 
 	remove := &cobra.Command{
 		Use:   "remove [profile]",
@@ -246,10 +256,10 @@ func pimCmd() *cobra.Command {
 	active.Flags().StringP("type", "t", "all", "Filter: all | resource | role | group")
 
 	activate := &cobra.Command{
-		Use:   "activate <name> [name...]",
+		Use:   "activate <name> [name...] | --all",
 		Short: "Activate one or more eligible role assignments",
-		Long:  "Looks up <name> across resource, role, and group eligibility. Errors if the name is ambiguous across categories or roles within a category (use --type and --role to disambiguate).",
-		Args:  cobra.MinimumNArgs(1),
+		Long:  "Looks up <name> across resource, role, and group eligibility. Errors if the name is ambiguous across categories or roles within a category (use --type and --role to disambiguate). Pass --all to activate every eligibility (filtered by --type / --role).",
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := azprofile.ActivateOptions{}
 			opts.Type, _ = cmd.Flags().GetString("type")
@@ -262,11 +272,13 @@ func pimCmd() *cobra.Command {
 			opts.TicketNumber, _ = cmd.Flags().GetString("ticket-number")
 			opts.Wait, _ = cmd.Flags().GetBool("wait")
 			opts.WaitTimeout, _ = cmd.Flags().GetInt("timeout")
+			opts.All, _ = cmd.Flags().GetBool("all")
+			opts.Yes, _ = cmd.Flags().GetBool("yes")
 			return azprofile.PimActivate(args, opts)
 		},
 	}
 	activate.Flags().StringP("type", "t", "all", "Restrict lookup: all | resource | role | group")
-	activate.Flags().StringP("role", "r", "", "Role to activate when multiple exist for the same name")
+	activate.Flags().StringP("role", "r", "", "Role to activate when multiple exist for the same name (or as a filter with --all)")
 	activate.Flags().IntP("duration", "d", 480, "Duration in minutes")
 	activate.Flags().String("reason", "config", "Reason for activation")
 	activate.Flags().String("start-date", "", "Start date (DD/MM/YYYY); defaults to now")
@@ -275,6 +287,8 @@ func pimCmd() *cobra.Command {
 	activate.Flags().String("ticket-number", "", "Ticket number")
 	activate.Flags().Bool("wait", true, "Wait for activation to complete")
 	activate.Flags().Int("timeout", 300, "Wait timeout in seconds")
+	activate.Flags().Bool("all", false, "Activate every eligible assignment (filtered by --type / --role)")
+	activate.Flags().BoolP("yes", "y", false, "Skip the confirmation prompt in --all mode")
 
 	deactivate := &cobra.Command{
 		Use:   "deactivate <name> [name...]",
