@@ -29,7 +29,8 @@ jobs:
             outdir="dist/azprofile-${VERSION}-${GOOS}-${GOARCH}"
             mkdir -p "$outdir"
             GOOS="$GOOS" GOARCH="$GOARCH" CGO_ENABLED=0 \
-              go build -trimpath -ldflags "-s -w" \
+              go build -trimpath \
+              -ldflags "-s -w -X 'github.com/neverprepared/azprofile/internal/azprofile.Version=${VERSION}'" \
               -o "$outdir/azprofile" ./cmd/azprofile
             cp README.md LICENSE "$outdir/"
           done

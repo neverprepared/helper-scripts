@@ -13,9 +13,10 @@ import (
 
 func main() {
 	root := &cobra.Command{
-		Use:   "azprofile",
-		Short: "Azure multi-identity manager",
-		Long:  "azprofile — Azure multi-identity manager. Create, switch, refresh, and sync Azure CLI identities.",
+		Use:     "azprofile",
+		Short:   "Azure multi-identity manager",
+		Long:    "azprofile — Azure multi-identity manager. Create, switch, refresh, and sync Azure CLI identities.",
+		Version: azprofile.Version,
 	}
 	root.SilenceUsage = true
 	root.SilenceErrors = true
@@ -31,6 +32,7 @@ func main() {
 		refreshCmd(),
 		syncCmd(),
 		pimCmd(),
+		updateCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
@@ -225,6 +227,27 @@ func refreshCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func updateCmd() *cobra.Command {
+	var (
+		check bool
+		yes   bool
+		force bool
+	)
+	c := &cobra.Command{
+		Use:   "update",
+		Short: "Check for a new release and (with confirmation) replace this binary",
+		Long:  "Queries the GitHub Releases API for the latest azprofile tag, compares it against the embedded version, and on confirmation downloads, SHA256-verifies, and atomically replaces the running binary. The release tarball is fetched over HTTPS and verified against the matching `*-checksums.txt` asset in the same release.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return azprofile.Update(azprofile.UpdateOptions{Check: check, Yes: yes, Force: force})
+		},
+	}
+	c.Flags().BoolVar(&check, "check", false, "Only check for an update; don't download or replace")
+	c.Flags().BoolVarP(&yes, "yes", "y", false, "Skip the confirmation prompt")
+	c.Flags().BoolVar(&force, "force", false, "Allow updating a dev build or reinstalling the same/older version")
+	return c
 }
 
 func pimCmd() *cobra.Command {

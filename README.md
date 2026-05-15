@@ -127,6 +127,18 @@ mv azprofile-vX.Y.Z-darwin-arm64/azprofile ~/.local/bin/
 
 Make sure `~/.local/bin` is on your `PATH`.
 
+### Updating
+
+Once installed from a release tarball, future updates are one command:
+
+```bash
+azprofile update          # check + prompt
+azprofile update --check  # status only, no download
+azprofile update --yes    # non-interactive
+```
+
+The command queries the GitHub Releases API, downloads the matching tarball + `*-checksums.txt`, verifies the SHA256, and atomically replaces the running binary. Dev installs (`make install` from a checked-out repo) are detected and refused — use `git pull && make install` instead.
+
 ### From source
 
 ```bash

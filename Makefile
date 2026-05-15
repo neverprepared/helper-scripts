@@ -2,7 +2,8 @@ PREFIX ?= $(HOME)/.local
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/azprofile
 GO ?= go
-LDFLAGS ?= -s -w
+VERSION ?= dev
+LDFLAGS ?= -s -w -X 'github.com/neverprepared/azprofile/internal/azprofile.Version=$(VERSION)'
 
 .PHONY: all build install uninstall clean list
 
