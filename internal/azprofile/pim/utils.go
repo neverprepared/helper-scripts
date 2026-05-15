@@ -15,10 +15,20 @@ func IsGovernanceRoleType(s string) bool {
 	return s == RoleTypeAADGroups || s == RoleTypeEntraRoles
 }
 
+// ResourceRequestStatus returns the assignment-request status string, or ""
+// if the response or its Properties block is nil — Azure occasionally returns
+// 2xx with a body missing the properties envelope, and unguarded callers panic.
+func ResourceRequestStatus(r *ResourceAssignmentRequestResponse) string {
+	if r == nil || r.Properties == nil {
+		return ""
+	}
+	return r.Properties.Status
+}
+
 // IsResourceRequestFailed reports whether a resource assignment request's
 // status indicates failure.
 func IsResourceRequestFailed(r *ResourceAssignmentRequestResponse) bool {
-	switch r.Properties.Status {
+	switch ResourceRequestStatus(r) {
 	case StatusAdminDenied, StatusCanceled, StatusDenied, StatusFailed,
 		StatusFailedAsResourceIsLocked, StatusInvalid, StatusRevoked, StatusTimedOut:
 		return true
@@ -27,7 +37,7 @@ func IsResourceRequestFailed(r *ResourceAssignmentRequestResponse) bool {
 }
 
 func IsResourceRequestPending(r *ResourceAssignmentRequestResponse) bool {
-	switch r.Properties.Status {
+	switch ResourceRequestStatus(r) {
 	case StatusPendingAdminDecision, StatusPendingApproval, StatusPendingApprovalProvisioning,
 		StatusPendingEvaluation, StatusPendingExternalProvisioning, StatusPendingProvisioning,
 		StatusPendingRevocation, StatusPendingScheduleCreation:
@@ -37,7 +47,7 @@ func IsResourceRequestPending(r *ResourceAssignmentRequestResponse) bool {
 }
 
 func IsResourceRequestOK(r *ResourceAssignmentRequestResponse) bool {
-	switch r.Properties.Status {
+	switch ResourceRequestStatus(r) {
 	case StatusAccepted, StatusAdminApproved, StatusGranted, StatusProvisioned,
 		StatusProvisioningStarted, StatusScheduleCreated:
 		return true
@@ -231,7 +241,7 @@ func (c *Client) WaitForResourceAssignment(ctx context.Context, scope, requestNa
 			return nil
 		}
 		if IsResourceRequestFailed(resp) {
-			return fmt.Errorf("activation failed: status=%s", resp.Properties.Status)
+			return fmt.Errorf("activation failed: status=%s", ResourceRequestStatus(resp))
 		}
 	}
 	return fmt.Errorf("timed out waiting %ds for role activation", timeoutSec)

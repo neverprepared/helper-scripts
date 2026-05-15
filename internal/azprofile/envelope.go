@@ -140,9 +140,20 @@ func (e *Envelope) ApplyTo(profileDir string) error {
 	}
 	defer os.RemoveAll(staging)
 
+	// Reject any filename outside SyncedFiles. The sender is authenticated by
+	// AES-GCM + master key, but a compromised sender could otherwise include
+	// `../foo` or arbitrary names and escape the profile directory.
+	allowed := make(map[string]bool, len(SyncedFiles))
+	for _, n := range SyncedFiles {
+		allowed[n] = true
+	}
+
 	// Decode all first so we can validate checksum before touching profileDir.
 	decoded := make(map[string][]byte, len(e.Files))
 	for name, b64 := range e.Files {
+		if !allowed[name] {
+			return fmt.Errorf("envelope contains disallowed file %q", name)
+		}
 		raw, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil {
 			return fmt.Errorf("decode %s: %w", name, err)

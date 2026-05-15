@@ -1,9 +1,30 @@
 package azprofile
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 )
+
+var profileNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// ValidateProfileName rejects names containing characters that could break
+// shell-quoted cron lines, path traversal, or surprising filesystem behavior.
+// Allowed: alphanumeric, dot, underscore, hyphen. Disallowed: spaces, slashes,
+// quotes, `..`, and shell metacharacters.
+func ValidateProfileName(name string) error {
+	if name == "" {
+		return fmt.Errorf("profile name is empty")
+	}
+	if name == "." || name == ".." {
+		return fmt.Errorf("profile name %q is reserved", name)
+	}
+	if !profileNameRE.MatchString(name) {
+		return fmt.Errorf("profile name %q has invalid characters; use only [A-Za-z0-9._-]", name)
+	}
+	return nil
+}
 
 func Home() string {
 	if v := os.Getenv("AZPROFILE_HOME"); v != "" {

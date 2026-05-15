@@ -97,6 +97,9 @@ func Use(name string) error {
 	if name == "" {
 		return fmt.Errorf("Usage: azprofile use <name>")
 	}
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
 	if err := MigrateIfNeeded(); err != nil {
 		return err
 	}
@@ -141,6 +144,9 @@ func Init(name string) error {
 	if name == "" {
 		return fmt.Errorf("Usage: azprofile init <name>")
 	}
+	if err := ValidateProfileName(name); err != nil {
+		return err
+	}
 	if err := MigrateIfNeeded(); err != nil {
 		return err
 	}
@@ -171,6 +177,9 @@ func Login(name string) error {
 		if name == "(none)" || name == "(unmigrated directory)" {
 			return fmt.Errorf("No active profile. Specify one: azprofile login <name>")
 		}
+	}
+	if err := ValidateProfileName(name); err != nil {
+		return err
 	}
 	target := ProfilePath(name)
 	if fi, err := os.Stat(target); err != nil || !fi.IsDir() {

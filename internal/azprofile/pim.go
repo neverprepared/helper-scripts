@@ -437,7 +437,7 @@ func (t *activateTarget) activate(ctx context.Context, c *pim.Client, subjectID,
 			return err
 		}
 		if pim.IsResourceRequestFailed(resp) {
-			return fmt.Errorf("status=%s", resp.Properties.Status)
+			return fmt.Errorf("status=%s", pim.ResourceRequestStatus(resp))
 		}
 		if opts.Wait && !pim.IsResourceRequestOK(resp) {
 			return c.WaitForResourceAssignment(ctx, scope, resp.Name, armToken, opts.WaitTimeout)
@@ -486,7 +486,7 @@ func (t *deactivateTarget) deactivate(ctx context.Context, c *pim.Client, subjec
 			return err
 		}
 		if pim.IsResourceRequestFailed(resp) {
-			return fmt.Errorf("status=%s", resp.Properties.Status)
+			return fmt.Errorf("status=%s", pim.ResourceRequestStatus(resp))
 		}
 		return nil
 	}

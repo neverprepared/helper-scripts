@@ -139,10 +139,13 @@ func CronInstall(profile, schedule string) error {
 	refreshArgs := ""
 	label := "all profiles"
 	if profile != "" {
+		if err := ValidateProfileName(profile); err != nil {
+			return err
+		}
 		if fi, err := os.Stat(ProfilePath(profile)); err != nil || !fi.IsDir() {
 			return fmt.Errorf("Profile '%s' not found. Run: azprofile init %s", profile, profile)
 		}
-		refreshArgs = " " + profile
+		refreshArgs = " " + shellQuote(profile)
 		label = "profile '" + profile + "'"
 	}
 
@@ -186,6 +189,9 @@ type PIMCronOpts struct {
 func CronPIMInstall(profile, schedule string, roles []string, opts PIMCronOpts) error {
 	if profile == "" {
 		return fmt.Errorf("profile required for pim cron")
+	}
+	if err := ValidateProfileName(profile); err != nil {
+		return err
 	}
 	if opts.All && len(roles) > 0 {
 		return fmt.Errorf("--all is mutually exclusive with positional role names")
@@ -238,11 +244,16 @@ func CronPIMInstall(profile, schedule string, roles []string, opts PIMCronOpts) 
 	}
 
 	tag := cronPIMTag(profile)
+	quotedProfile := shellQuote(profile)
+	// Wrap the refresh+activate chain in `{ ...; }` so the redirect captures
+	// stdout/stderr from BOTH commands. Without the braces, `>> pim.log 2>&1`
+	// only attaches to the rightmost simple command (the pim activate call),
+	// and a failing refresh leaves no diagnostic trail.
 	cronLine := fmt.Sprintf(
-		`%s AZPROFILE_HOME="%s" AZURE_CONFIG_DIR="%s/.azure-profiles/%s" %s refresh %s && %s pim activate%s --reason %s -d %d%s >> "%s/.azure-profiles/pim.log" 2>&1 %s`,
+		`%s AZPROFILE_HOME="%s" AZURE_CONFIG_DIR="%s/.azure-profiles/%s" { %s refresh %s && %s pim activate%s --reason %s -d %d%s ; } >> "%s/.azure-profiles/pim.log" 2>&1 %s`,
 		schedule, homeExpr,
 		homeExpr, profile,
-		exe, profile,
+		exe, quotedProfile,
 		exe, activateArgs.String(),
 		shellQuote(opts.Reason), opts.Duration, extra,
 		homeExpr, tag,

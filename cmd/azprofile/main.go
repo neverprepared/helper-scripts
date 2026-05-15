@@ -219,9 +219,8 @@ func refreshCmd() *cobra.Command {
 		Use:   "refresh [profiles...]",
 		Short: "Refresh Azure tokens (all profiles or specific ones)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			failures := azprofile.Refresh(args)
-			if failures > 0 {
-				os.Exit(failures)
+			if failures := azprofile.Refresh(args); failures > 0 {
+				return fmt.Errorf("refresh failed for %d profile(s)", failures)
 			}
 			return nil
 		},
